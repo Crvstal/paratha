@@ -1,0 +1,332 @@
+name: Flutter CI/CD
+
+# Trigger the workflow on push and pull requests
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master ]
+  
+  # Allow manual triggering
+  workflow_dispatch:
+
+# Define environment variables
+env:
+  FLUTTER_VERSION: "3.24.3"
+  JAVA_VERSION: "17"
+
+jobs:
+  # Job 1: Test and Analyze
+  test:
+    name: Test & Analyze
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: ${{ env.JAVA_VERSION }}
+        
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        channel: 'stable'
+        cache: true
+        
+    - name: Flutter Doctor
+      run: flutter doctor -v
+      
+    - name: Get dependencies
+      run: flutter pub get
+      
+    - name: Verify formatting
+      run: dart format --output=none --set-exit-if-changed .
+      
+    - name: Analyze project source
+      run: flutter analyze --fatal-infos
+      
+    - name: Run tests
+      run: flutter test --coverage
+      
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: coverage/lcov.info
+
+  # Job 2: Build Android APK
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: ${{ env.JAVA_VERSION }}
+        
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        channel: 'stable'
+        cache: true
+        
+    - name: Get dependencies
+      run: flutter pub get
+      
+    - name: Build APK (Debug)
+      run: flutter build apk --debug
+      
+    - name: Build APK (Release)
+      run: flutter build apk --release --split-per-abi
+      
+    - name: Build App Bundle
+      run: flutter build appbundle --release
+      
+    - name: Upload APK artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: android-artifacts
+        path: |
+          build/app/outputs/flutter-apk/*.apk
+          build/app/outputs/bundle/release/*.aab
+        retention-days: 30
+
+  # Job 3: Build iOS (if you have macOS runners)
+  build-ios:
+    name: Build iOS
+    runs-on: macos-latest
+    needs: test
+    if: false  # Set to true when you want to enable iOS builds
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        channel: 'stable'
+        cache: true
+        
+    - name: Get dependencies
+      run: flutter pub get
+      
+    - name: Build iOS (No Codesign)
+      run: flutter build ios --release --no-codesign
+      
+    - name: Upload iOS artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ios-artifacts
+        path: build/ios/iphoneos/*.app
+        retention-days: 30
+
+  # Job 4: Build Web
+  build-web:
+    name: Build Web
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        channel: 'stable'
+        cache: true
+        
+    - name: Get dependencies
+      run: flutter pub get
+      
+    - name: Build Web
+      run: flutter build web --release --web-renderer html
+      
+    - name: Upload Web artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: web-artifacts
+        path: build/web/
+        retention-days: 30
+
+  # Job 5: Build Windows
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    needs: test
+    if: false  # Set to true when you want to enable Windows builds
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        channel: 'stable'
+        cache: true
+        
+    - name: Enable Windows desktop
+      run: flutter config --enable-windows-desktop
+      
+    - name: Get dependencies
+      run: flutter pub get
+      
+    - name: Build Windows
+      run: flutter build windows --release
+      
+    - name: Upload Windows artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-artifacts
+        path: build/windows/x64/runner/Release/
+        retention-days: 30
+
+  # Job 6: Build macOS
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
+    needs: test
+    if: false  # Set to true when you want to enable macOS builds
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        channel: 'stable'
+        cache: true
+        
+    - name: Enable macOS desktop
+      run: flutter config --enable-macos-desktop
+      
+    - name: Get dependencies
+      run: flutter pub get
+      
+    - name: Build macOS
+      run: flutter build macos --release
+      
+    - name: Upload macOS artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: macos-artifacts
+        path: build/macos/Build/Products/Release/*.app
+        retention-days: 30
+
+  # Job 7: Build Linux
+  build-linux:
+    name: Build Linux
+    runs-on: ubuntu-latest
+    needs: test
+    if: false  # Set to true when you want to enable Linux builds
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Linux dependencies
+      run: |
+        sudo apt-get update -y
+        sudo apt-get install -y ninja-build libgtk-3-dev
+        
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        channel: 'stable'
+        cache: true
+        
+    - name: Enable Linux desktop
+      run: flutter config --enable-linux-desktop
+      
+    - name: Get dependencies
+      run: flutter pub get
+      
+    - name: Build Linux
+      run: flutter build linux --release
+      
+    - name: Upload Linux artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-artifacts
+        path: build/linux/x64/release/bundle/
+        retention-days: 30
+
+  # Job 8: Deploy to Firebase Hosting (Optional)
+  deploy-web:
+    name: Deploy Web to Firebase
+    runs-on: ubuntu-latest
+    needs: build-web
+    if: github.ref == 'refs/heads/main' && false  # Set to true when ready to deploy
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download Web artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: web-artifacts
+        path: build/web/
+        
+    - name: Deploy to Firebase
+      uses: FirebaseExtended/action-hosting-deploy@v0
+      with:
+        repoToken: '${{ secrets.GITHUB_TOKEN }}'
+        firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+        channelId: live
+        projectId: your-firebase-project-id
+
+  # Job 9: Create Release
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [build-android, build-web]
+    if: github.ref == 'refs/heads/main' && startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          android-artifacts/*.apk
+          android-artifacts/*.aab
+          web-artifacts.zip
+        body: |
+          ## What's Changed
+          * Automated release from GitHub Actions
+          
+          ## Downloads
+          - **Android APK**: Install directly on Android devices
+          - **Android App Bundle**: For Google Play Store
+          - **Web**: Deployed automatically
+          
+          Full Changelog: ${{ github.event.compare }}
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
